@@ -76,32 +76,43 @@ public class Board {
     private void setupKeyHandling() {
         mainContainer.setFocusTraversable(true);
         mainContainer.setOnKeyPressed(event -> {
-            // 메뉴가 열려있으면 게임 입력 무시
-            if (menuOverlay.isVisible()) return;
-            
-            if (isPaused && event.getCode() != KeyCode.ESCAPE) return;
-            if (gameLogic.isGameOver() && event.getCode() != KeyCode.ESCAPE) return;
-            
             KeyCode code = event.getCode();
+            
+            // 메뉴가 열려있을 때 ESC 키 처리
+            if (menuOverlay.isVisible()) {
+                if (code == KeyCode.ESCAPE) {
+                    // 메뉴가 열려있을 때 ESC를 누르면 메뉴 닫고 게임 재개
+                    resumeGame();
+                }
+                // 다른 키들은 MenuOverlay에서 처리
+                return;
+            }
+            
+            // 게임 오버 상태에서는 ESC 키만 허용 (게임 오버 메뉴 표시)
+            if (gameLogic.isGameOver()) {
+                if (code == KeyCode.ESCAPE) {
+                    showGameOverMenu();
+                }
+                return;
+            }
+            
+            // 일반 게임 중 키 처리
             switch (code) {
                 case LEFT:
-                // 왼쪽 이동
-                    gameLogic.moveLeft();
+                    if (!isPaused) gameLogic.moveLeft();
                     break;
                 case RIGHT:
-                // 오른쪽 이동
-                    gameLogic.moveRight();
+                    if (!isPaused) gameLogic.moveRight();
                     break;
                 case DOWN:
-                // 아래로 이동
-                    handleMoveDown();
+                    if (!isPaused) handleMoveDown();
                     break;
                 case UP:
-                // 회전
-                    gameLogic.rotateBlock();
+                    if (!isPaused) gameLogic.rotateBlock();
                     break;
                 case ESCAPE:
-                    handleEscapeKey();
+                    // ESC 키 토글: 일시정지 ↔ 재개
+                    togglePause();
                     break;
                 case SPACE:
                     if (!isPaused && !gameLogic.isGameOver()) {
@@ -110,19 +121,20 @@ public class Board {
                     break;
             }
             
+            // 메뉴가 보이지 않을 때만 보드 다시 그리기
             if (!menuOverlay.isVisible()) {
                 drawBoard();
             }
         });
     }
-    
-    // ESC 키 처리
-    private void handleEscapeKey() {
-        if (gameLogic.isGameOver()) {
-            showGameOverMenu();
-        } else if (isPaused || menuOverlay.isVisible()) {
+
+    // ESC 키 처리를 토글 방식으로 변경
+    private void togglePause() {
+        if (isPaused) {
+            // 현재 일시정지 상태 → 재개
             resumeGame();
         } else {
+            // 현재 게임 중 → 일시정지 및 메뉴 표시
             pauseGame();
         }
     }
@@ -169,6 +181,7 @@ public class Board {
         if (!gameLogic.isGameOver()) {
             startGameLoop();
         }
+        // 포커스를 다시 게임으로 이동
         mainContainer.requestFocus();
     }
     
@@ -331,11 +344,55 @@ public class Board {
         
         drawGrid();
         drawPlacedBlocks(currentColors);
-        drawCurrentBlock(currentColors);
+        
+        // 일시정지 상태가 아닐 때만 현재 블록 그리기
+        if (!isPaused) {
+            drawCurrentBlock(currentColors);
+        }
+
+        // 일시정지 오버레이 (메뉴가 열려있지 않을 때만)
+        if (isPaused && !menuOverlay.isVisible()) {
+            drawPauseOverlay();
+        }
 
         scorePanel.updateNextBlock(gameLogic.getNextBlock());
     }
     
+    // 일시정지 오버레이 그리기
+    private void drawPauseOverlay() {
+        // 반투명 배경
+        gc.setFill(Color.color(0, 0, 0, 0.7));
+        gc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        
+        // "PAUSED" 텍스트
+        gc.setFill(Color.WHITE);
+        gc.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 24));
+        
+        String pauseText = "PAUSED";
+        javafx.scene.text.Text tempText = new javafx.scene.text.Text(pauseText);
+        tempText.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 24));
+        double textWidth = tempText.getBoundsInLocal().getWidth();
+        double textHeight = tempText.getBoundsInLocal().getHeight();
+        
+        double x = (canvas.getWidth() - textWidth) / 2;
+        double y = (canvas.getHeight() + textHeight) / 2;
+        
+        gc.fillText(pauseText, x, y);
+        
+        // 안내 메시지
+        gc.setFont(javafx.scene.text.Font.font("Arial", 14));
+        String instructionText = "Press ESC to resume";
+        javafx.scene.text.Text tempInstruction = new javafx.scene.text.Text(instructionText);
+        tempInstruction.setFont(javafx.scene.text.Font.font("Arial", 14));
+        double instructionWidth = tempInstruction.getBoundsInLocal().getWidth();
+        
+        double instructionX = (canvas.getWidth() - instructionWidth) / 2;
+        double instructionY = y + 40;
+        
+        gc.setFill(Color.LIGHTGRAY);
+        gc.fillText(instructionText, instructionX, instructionY);
+    }
+
     // 그리드 그리기
     private void drawGrid() {
         gc.setStroke(Color.web("#16213e"));
